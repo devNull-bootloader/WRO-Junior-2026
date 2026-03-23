@@ -9,10 +9,10 @@ left_motor = Motor(Port.A)
 right_motor = Motor(Port.B)
 sensor = ColorSensor(Port.E)
 
-target = 35
+target = 53
 
-Kp = 8
-Kd = 3
+Kp = 6.5
+Kd = 4
 Ki = 0
 
 integral = 0
