@@ -1,47 +1,360 @@
 from pybricks.hubs import PrimeHub
 from pybricks.pupdevices import Motor, ColorSensor
-from pybricks.parameters import Port, Direction, Stop
+from pybricks.parameters import Port, Direction
 from pybricks.robotics import DriveBase
 from pybricks.tools import wait
 
-hub = PrimeHub()
 
-left_motor = Motor(Port.A, positive_direction=Direction.COUNTERCLOCKWISE)
-right_motor = Motor(Port.B)
-up_motor = Motor(Port.C)
-grabber_motor = Motor(Port.D)
-line_sensor = ColorSensor(Port.E)
-front_sensor = ColorSensor(Port.F)
+class Robot:
+    def __init__(self):
+        # Hub
+        self.hub = PrimeHub()
 
-drive_base = DriveBase(left_motor, right_motor, 56, 165)
+        # Motors
+        self.left_motor = Motor(Port.A, positive_direction=Direction.COUNTERCLOCKWISE)
+        self.right_motor = Motor(Port.B)
+        self.up_motor = Motor(Port.C)
+        self.grabber_motor = Motor(Port.D)
 
-def line_follow(distance):
-    target = 55
-    Kp = 2
-    Kd = 4
-    Ki = 0
+        # Sensors
+        self.line_sensor = ColorSensor(Port.E)
+        self.front_sensor = ColorSensor(Port.F)
 
-    integral = 0
-    last_error = 0
+        # Drive base
+        self.drive_base = DriveBase(self.left_motor, self.right_motor, 56, 165)
 
-    # Reset distance
-    drive_base.reset()
+        # Line follow PID constants (kept exactly as you requested)
+        self.target = 24.5
+        self.Kp = 5.5
+        self.Kd = 4
+        self.Ki = 0
 
-    while drive_base.distance() < distance - 12:  # Overshoot compensation
-        reflection = line_sensor.reflection()
-        error = reflection - target
+        # Line color detection constants (hue ranges)
+        self.red_range = (340, 10)    # wrap-around
+        self.blue_range = (220, 224)
+        self.green_range = (150, 180)
 
-        integral += error
-        derivative = error - last_error
-        correction = (Kp * error) + (Kd * derivative)
+        # State flags
+        self.grabbing = False
+        self.carrying = False
 
-        last_error = error
+    # Sensors
 
-        base_speed = 200   # mm/s
+    def detect_color(self):
+        # Hue-based detection using front sensor (kept as in your code).
+        h, s, v = self.front_sensor.hsv()
 
-        # drive(speed, turn_rate)
-        drive_base.drive(base_speed, correction)
+        # Adjusted black threshold to be more practical
+        if v < 10:
+            return "black"
+        if h < 15 or h > 345:
+            return "red"
+        if 40 < h < 70:
+            return "yellow"
+        if 120 < h < 180:
+            return "green"
+        if 190 < h < 260:
+            return "blue"
+        return "unknown"
 
-        wait(10)
+    def detect_color_new(self):
+        h, s, v = self.front_sensor.hsv()
 
-    drive_base.brake()
+        # HARD FILTER: ignore weak signals (too far / ground)
+        if v < 10 or s < 50:
+            return "unknown"
+
+        # Color detection (based on your calibrated ranges)
+        if h > 330 or h < 10:
+            return "red"
+
+        elif 45 < h < 65:
+            return "yellow"
+
+        elif 140 < h < 170:
+            return "green"
+
+        elif 210 < h < 225:
+            return "blue"
+
+        return "unknown"
+
+    def scan_probes(self):
+        detected_colors = []
+        last_color = None
+        stable_count = 0
+        required_stable = 3  # how many consistent readings needed
+
+        self.drive_base.reset()
+        self.hub.imu.reset_heading(0)
+
+        distance = 600
+        speed = 150
+
+        while self.drive_base.distance() < distance:
+            # Gyro correction
+            error = self.hub.imu.heading()
+            correction = error * 2
+
+            self.drive_base.drive(speed, -correction)
+
+            # Detect color
+            color = self.detect_color_new()
+
+            if color != "unknown":
+                if color == last_color:
+                    stable_count += 1
+                else:
+                    stable_count = 1
+
+                # Only confirm after stable readings
+                if stable_count == required_stable:
+                    if color not in detected_colors:
+                        detected_colors.append(color)
+            else:
+                stable_count = 0
+
+            last_color = color
+
+            wait(10)
+
+        self.drive_base.brake()
+
+        return detected_colors
+
+    # Movement
+
+    def drive_straight(self, distance, speed=300, timeout_ms=None):
+        # Drive straight using drive() loop so speed parameter is respected.
+        self.drive_base.reset()
+        direction = 1 if distance >= 0 else -1
+        target = abs(distance)
+
+        elapsed = 0
+        step = 10  # ms per loop iteration
+
+        while abs(self.drive_base.distance()) < target:
+            # Timeout check
+            if timeout_ms is not None and elapsed >= timeout_ms:
+                break
+
+            # Drive straight with heading correction from IMU if available
+            try:
+                heading_error = self.hub.imu.heading()
+            except Exception:
+                heading_error = 0
+
+            self.drive_base.drive(speed * direction, -heading_error * 0.5)
+            # Poll grabber while moving
+            self.update_grabber()
+            wait(step)
+            elapsed += step
+
+        self.drive_base.brake()
+
+    def gyro_turn(self, angle, speed=150, timeout_ms=None):
+        try:
+            self.hub.imu.reset_heading(0)
+        except Exception:
+            pass
+
+        target = angle
+
+        # Adjust speed if carrying
+        if self.carrying:
+            speed = int(speed * 0.7)
+
+        elapsed = 0
+        step = 10
+
+        while True:
+            if timeout_ms is not None and elapsed >= timeout_ms:
+                break
+
+            try:
+                current = self.hub.imu.heading()
+            except Exception:
+                current = 0
+
+            error = target - current
+
+            # Stop when close enough
+            if abs(error) < 2:
+                break
+
+            # Smooth proportional turning
+            turn_speed = error * 2
+
+            # Clamp speed
+            if turn_speed > speed:
+                turn_speed = speed
+            elif turn_speed < -speed:
+                turn_speed = -speed
+
+            self.drive_base.drive(0, turn_speed)
+
+            # Keep grabber active
+            self.update_grabber()
+
+            wait(step)
+            elapsed += step
+
+        self.drive_base.brake()
+
+    def gyro_straight(self, distance, speed=300, timeout_ms=None):
+        # Straight drive using IMU heading correction. Polls grabber during motion.
+        self.drive_base.reset()
+        try:
+            self.hub.imu.reset_heading(0)
+        except Exception:
+            pass
+
+        direction = 1 if distance >= 0 else -1
+        target_abs = abs(distance)
+
+        # carrying adjustment
+        if self.carrying:
+            speed = int(speed * 0.7)
+
+        elapsed = 0
+        step = 10
+
+        while abs(self.drive_base.distance()) < target_abs:
+            if timeout_ms is not None and elapsed >= timeout_ms:
+                break
+
+            try:
+                error = self.hub.imu.heading()
+            except Exception:
+                error = 0
+
+            correction = error * (1.5 if self.carrying else 2)
+            self.drive_base.drive(speed * direction, -correction)
+
+            # Poll grabber while moving
+            self.update_grabber()
+
+            wait(step)
+            elapsed += step
+
+        self.drive_base.brake()
+
+    def line_follow(self, distance, target_color=None, timeout_ms=None):
+        # PD line follow using your PID constants (unchanged).
+        integral = 0
+        last_error = 0
+
+        self.drive_base.reset()
+        target_abs = abs(distance)
+
+        elapsed = 0
+        step = 10
+
+        while abs(self.drive_base.distance()) < target_abs - 12:  # overshoot compensation
+            if timeout_ms is not None and elapsed >= timeout_ms:
+                break
+
+            reflection = self.line_sensor.reflection()
+            error = reflection - self.target
+
+            integral += error
+            derivative = error - last_error
+            correction = (self.Kp * error) + (self.Kd * derivative)
+
+            last_error = error
+
+            # ADAPTIVE SPEED
+            if self.carrying:
+                base_speed = 120
+                correction *= 0.8   # smoother turns
+            else:
+                base_speed = 200 if target_color is None else 140
+
+            self.drive_base.drive(base_speed, correction)
+
+            # Poll grabber while moving
+            self.update_grabber()
+
+            # color detection on the line sensor if requested
+            if target_color is not None:
+                h, s, v = self.line_sensor.hsv()
+
+                if target_color == "red":
+                    if h > self.red_range[0] or h < self.red_range[1]:
+                        break
+                elif target_color == "blue":
+                    if self.blue_range[0] < h < self.blue_range[1]:
+                        break
+                elif target_color == "green":
+                    if self.green_range[0] < h < self.green_range[1]:
+                        break
+
+            wait(step)
+            elapsed += step
+
+        self.drive_base.brake()
+
+    # Arm / Grabber
+
+    def move_arm(self, angle, speed=200):
+        # Blocking move to target angle
+        self.up_motor.run_target(speed, angle)
+
+    def grab(self):
+        # Blocking grab: move to target and set carrying True after motion completes.
+        self.grabber_motor.run_target(100, -50)  # blocking
+        self.carrying = True
+
+    def release(self):
+        # Blocking release: open grabber and clear carrying flag.
+        self.grabber_motor.run_target(100, 15)  # blocking
+        self.carrying = False
+
+    def spread(self, angle=0, speed=100):
+        # Move grabber to a spread/open angle (blocking).
+        self.grabber_motor.run_target(speed, angle)
+
+    # High level actions
+
+    def start_grab_towers(self):
+        # Non-blocking start: spin grabber slowly while approaching towers.
+        self.grabber_motor.run(30)
+        self.grabbing = True
+        # Do not set carrying here; set carrying when a stall or successful grab is detected
+
+    def release_towers(self):
+        # Stop grabber and clear flags
+        self.grabber_motor.stop()
+        self.grabbing = False
+        self.carrying = False
+
+    def update_grabber(self):
+        # Polling method: if we were trying to grab and the motor stalls, assume we have grabbed.
+        try:
+            stalled = self.grabber_motor.stalled()
+        except Exception:
+            stalled = False
+
+        if self.grabbing and stalled:
+            # reduce power to hold
+            self.grabber_motor.run(5)
+            self.grabbing = False
+            self.carrying = True
+
+    # Mission run
+
+    def run(self):
+        self.gyro_straight(350)
+        wait(200)
+        self.left_motor.run_angle(300, 523)
+        wait(200)
+        self.gyro_straight(280)
+        wait(200)
+        self.gyro_turn(-90)
+        wait(200)
+        probe_order = self.scan_probes()
+        print(probe_order)
+
+
+robot = Robot()
+robot.run()
