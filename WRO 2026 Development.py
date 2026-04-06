@@ -38,6 +38,9 @@ class Robot:
         self.grabbing = False
         self.carrying = False
 
+        # Probe mission
+        self.probe_order = []
+
     # Sensors
 
     def detect_color(self):
@@ -88,7 +91,7 @@ class Robot:
         self.drive_base.reset()
         self.hub.imu.reset_heading(0)
 
-        distance = 600
+        distance = 692 # yeah... don't try tweaking this
         speed = 150
 
         while self.drive_base.distance() < distance:
@@ -294,6 +297,57 @@ class Robot:
 
         self.drive_base.brake()
 
+    def drive_until_color(self, target_color, speed=300, timeout_ms=None):
+        self.drive_base.reset()
+        try:
+            self.hub.imu.reset_heading(0)
+        except Exception:
+            pass
+
+        elapsed = 0
+        step = 10
+
+        # Adjust speed if carrying
+        if self.carrying:
+            speed = int(speed * 0.7)
+
+        while True:
+            # Timeout safety
+            if timeout_ms is not None and elapsed >= timeout_ms:
+                break
+
+            # Gyro correction
+            try:
+                error = self.hub.imu.heading()
+            except Exception:
+                error = 0
+
+            correction = error * (1.5 if self.carrying else 2)
+            self.drive_base.drive(speed, -correction)
+
+            # Poll grabber
+            self.update_grabber()
+
+            # ----- COLOR DETECTION (same logic as line_follow) -----
+            h, s, v = self.line_sensor.hsv()
+
+            if target_color == "red":
+                if (h > self.red_range[0] or h < self.red_range[1]) and s > 50 and v > 10:
+                    break
+
+            elif target_color == "blue":
+                if self.blue_range[0] < h < self.blue_range[1]:
+                    break
+
+            elif target_color == "green":
+                if self.green_range[0] < h < self.green_range[1]:
+                    break
+
+            wait(step)
+            elapsed += step
+
+        self.drive_base.brake()
+
     # Arm / Grabber
 
     def move_arm(self, angle, speed=200):
@@ -318,7 +372,7 @@ class Robot:
 
     def start_grab_towers(self):
         # Non-blocking start: spin grabber slowly while approaching towers.
-        self.grabber_motor.run(30)
+        self.grabber_motor.run(100)
         self.grabbing = True
         # Do not set carrying here; set carrying when a stall or successful grab is detected
 
@@ -341,6 +395,14 @@ class Robot:
             self.grabbing = False
             self.carrying = True
 
+    def first_probe_algorithm(self):
+        if self.probe_order[3] == "red":
+            self.gyro_turn(158, speed=100)
+            self.drive_until_color("red")
+            self.gyro_turn(23)
+            self.gyro_straight(-15)
+
+
     # Mission run
 
     def run(self):
@@ -348,12 +410,21 @@ class Robot:
         wait(200)
         self.left_motor.run_angle(300, 523)
         wait(200)
-        self.gyro_straight(280)
+        self.gyro_straight(269)
         wait(200)
-        self.gyro_turn(-90)
+        self.gyro_turn(-91)
         wait(200)
-        probe_order = self.scan_probes()
-        print(probe_order)
+        self.probe_order = self.scan_probes()
+        print(self.probe_order)
+        self.gyro_turn(80, speed=100)
+        self.gyro_straight(-1100, speed=500)
+        self.gyro_straight(760)
+        self.drive_until_color("green", speed=200)
+        self.gyro_straight(8)
+        self.start_grab_towers()
+        wait(2000)
+        self.update_grabber()
+        self.first_probe_algorithm()
 
 
 robot = Robot()
