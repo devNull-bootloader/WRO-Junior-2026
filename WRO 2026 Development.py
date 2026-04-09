@@ -32,7 +32,7 @@ class Robot:
         # Line color detection constants (hue ranges)
         self.red_range = (340, 10)    # wrap-around
         self.blue_range = (220, 224)
-        self.green_range = (150, 180)
+        self.green_range = (160, 190)
 
         # State flags
         self.grabbing = False
@@ -91,7 +91,7 @@ class Robot:
         self.drive_base.reset()
         self.hub.imu.reset_heading(0)
 
-        distance = 692 # yeah... don't try tweaking this
+        distance = 685 # yeah... don't try tweaking this
         speed = 150
 
         while self.drive_base.distance() < distance:
@@ -354,12 +354,12 @@ class Robot:
         # Blocking move to target angle
         self.up_motor.run_target(speed, angle)
 
-    def grab(self):
+    def release(self):
         # Blocking grab: move to target and set carrying True after motion completes.
         self.grabber_motor.run_target(100, -50)  # blocking
         self.carrying = True
 
-    def release(self):
+    def grab(self):
         # Blocking release: open grabber and clear carrying flag.
         self.grabber_motor.run_target(100, 15)  # blocking
         self.carrying = False
@@ -397,34 +397,55 @@ class Robot:
 
     def first_probe_algorithm(self):
         if self.probe_order[3] == "red":
-            self.gyro_turn(158, speed=100)
+            self.gyro_turn(158.2, speed=50)
+            wait(200)
             self.drive_until_color("red")
-            self.gyro_turn(23)
-            self.gyro_straight(-15)
-
+            wait(200)
+            self.gyro_straight(-2)
+            wait(200)
+            self.gyro_turn(30)
+            wait(200)
+            if self.probe_order[2] == "green":
+                self.release_towers()
+                wait(200)
+                self.release()
+                wait(200)
+                self.move_arm(-20)
+                wait(200)
+                self.gyro_turn(-16)
+                wait(200)
+                self.gyro_turn(11)
+        
 
     # Mission run
 
     def run(self):
+        self.hub.imu.reset_heading(0)
+        wait(200)
         self.gyro_straight(350)
         wait(200)
         self.left_motor.run_angle(300, 523)
         wait(200)
-        self.gyro_straight(269)
+        self.gyro_straight(266)
         wait(200)
-        self.gyro_turn(-91)
+        self.gyro_turn(-90)
         wait(200)
         self.probe_order = self.scan_probes()
         print(self.probe_order)
-        self.gyro_turn(80, speed=100)
-        self.gyro_straight(-1100, speed=500)
-        self.gyro_straight(760)
-        self.drive_until_color("green", speed=200)
-        self.gyro_straight(8)
+        self.gyro_turn(50, speed=100)
+        wait(200)
+        self.gyro_straight(-250)
+        wait(200)
+        self.gyro_turn(43, speed=100)
+        wait(200)
+        self.gyro_straight(173, speed=250)
+        self.drive_until_color("green", speed=150)
+        self.gyro_straight(10)
         self.start_grab_towers()
         wait(2000)
         self.update_grabber()
         self.first_probe_algorithm()
+
 
 
 robot = Robot()
