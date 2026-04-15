@@ -32,7 +32,7 @@ class Robot:
         # Line color detection constants (hue ranges)
         self.red_range = (340, 10)    # wrap-around
         self.blue_range = (220, 224)
-        self.green_range = (160, 190)
+        self.green_range = (160, 175)
 
         # State flags
         self.grabbing = False
@@ -403,7 +403,9 @@ class Robot:
             wait(200)
             self.gyro_straight(-2)
             wait(200)
-            self.gyro_turn(30)
+            self.gyro_turn(33)
+            wait(100)
+            self.gyro_turn(-1.5)
             wait(200)
             if self.probe_order[2] == "green":
                 self.release_towers()
@@ -412,10 +414,24 @@ class Robot:
                 wait(200)
                 self.move_arm(-20)
                 wait(200)
-                self.gyro_turn(-16)
+                self.gyro_turn(-11)
                 wait(200)
-                self.gyro_turn(11)
-        
+                self.gyro_turn(6)
+            elif self.probe_order[2] == "blue":
+                self.release_towers()
+                wait(200)
+                self.release()
+                wait(200)
+                self.move_arm(-20)
+                wait(200)
+                self.gyro_straight(-40)
+                wait(200)
+                self.gyro_turn(40)
+                wait(200)
+                self.gyro_straight(52)
+                wait(200)
+                self.gyro_straight(160)
+
 
     # Mission run
 
@@ -428,7 +444,7 @@ class Robot:
         wait(200)
         self.gyro_straight(266)
         wait(200)
-        self.gyro_turn(-90)
+        self.gyro_turn(-91)
         wait(200)
         self.probe_order = self.scan_probes()
         print(self.probe_order)
