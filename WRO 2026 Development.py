@@ -65,7 +65,7 @@ class Robot:
 
         # HARD FILTER: ignore weak signals (too far / ground)
         if v < 10 or s < 50:
-            if 239 < h < 301 and 3 < v < 20 and 5 < s < 30:
+            if 230 < h < 310 and 3 < v < 30 and 3 < s < 30:
                 return "black"
             else:    
                 return "unknown"
@@ -398,8 +398,63 @@ class Robot:
             self.grabbing = False
             self.carrying = True
 
+    # -------------------------------------------------------------------------
+    # Delivery helpers
+    # -------------------------------------------------------------------------
+
+    def _prepare_delivery_standard(self):
+        """
+        Used by most inner branches: stop towers, clamp arm, small corrective
+        turn, then lower arm. Call this before the branch-specific movement.
+        """
+        self.release_towers()
+        wait(200)
+        self.release()
+        wait(200)
+        self.gyro_turn(-5)
+        wait(200)
+        self.move_arm(-20)
+        wait(200)
+
+    def _prepare_delivery_close(self):
+        """
+        Used by the 'nearest probe' branches where the robot stays close:
+        stop towers, clamp arm, lower arm immediately (no -5 turn).
+        """
+        self.release_towers()
+        wait(200)
+        self.release()
+        wait(200)
+        self.move_arm(-20)
+        wait(200)
+
+    def _long_route(self, straight_distance, final_distance=115):
+        """
+        Shared 'swing wide' route used when the target probe is far away:
+        pivot on left wheel, drive forward, U-turn, final approach.
+        """
+        self.left_motor.run_angle(200, -600)
+        wait(200)
+        self.gyro_straight(straight_distance)
+        wait(200)
+        self.gyro_turn(-270)
+        wait(200)
+        self.gyro_straight(final_distance)
+
+    # -------------------------------------------------------------------------
+
     def first_probe_algorithm(self):
-        if self.probe_order[3] == "red":
+        # Guard: we need at least indices [2] and [3] to be safe.
+        if len(self.probe_order) < 4:
+            print("ERROR: only", len(self.probe_order),
+                  "colors detected:", self.probe_order,
+                  "— aborting probe algorithm.")
+            return
+
+        outer = self.probe_order[3]
+        inner = self.probe_order[2]
+
+        if outer == "red":
             self.gyro_turn(157.1, speed=50)
             wait(200)
             self.drive_until_color("red")
@@ -410,7 +465,7 @@ class Robot:
             wait(100)
             self.gyro_turn(-4)
             wait(200)
-            if self.probe_order[2] == "green":
+            if inner == "green":
                 self.release_towers()
                 wait(200)
                 self.release()
@@ -420,15 +475,8 @@ class Robot:
                 self.gyro_turn(-11)
                 wait(200)
                 self.gyro_turn(6)
-            elif self.probe_order[2] == "black":
-                self.release_towers()
-                wait(200)
-                self.release()
-                wait(200)
-                self.gyro_turn(-5)
-                wait(200)
-                self.move_arm(-20)
-                wait(200)
+            elif inner == "black":
+                self._prepare_delivery_standard()
                 self.gyro_straight(-50)
                 wait(200)
                 self.gyro_turn(30)
@@ -440,15 +488,8 @@ class Robot:
                 self.gyro_turn(40)
                 wait(200)
                 self.gyro_straight(68)
-            elif self.probe_order[2] == "blue":
-                self.release_towers()
-                wait(200)
-                self.release()
-                wait(200)
-                self.gyro_turn(-5)
-                wait(200)
-                self.move_arm(-20)
-                wait(200)
+            elif inner == "blue":
+                self._prepare_delivery_standard()
                 self.gyro_straight(-50)
                 wait(200)
                 self.gyro_turn(30)
@@ -464,15 +505,8 @@ class Robot:
                 self.gyro_turn(15)
                 wait(200)
                 self.gyro_straight(35)
-            elif self.probe_order[2] == "yellow":
-                self.release_towers()
-                wait(200)
-                self.release()
-                wait(200)
-                self.gyro_turn(-5)
-                wait(200)
-                self.move_arm(-20)
-                wait(200)
+            elif inner == "yellow":
+                self._prepare_delivery_standard()
                 self.gyro_straight(-50)
                 wait(200)
                 self.gyro_turn(30)
@@ -485,34 +519,22 @@ class Robot:
                 wait(200)
                 self.gyro_straight(310)
 
-        if self.probe_order[3] == "green":
-            self.gyro_turn(166, speed=50)
+        elif outer == "green":
+            self.gyro_turn(165.5, speed=50)
             wait(200)
             self.drive_until_color("red")
             wait(200)
             self.gyro_straight(-5)
             wait(200)
-            self.gyro_turn(23)
+            self.gyro_turn(24)
             wait(200)
-            if self.probe_order[2] == "black":
-                self.release_towers()
-                wait(200)
-                self.release()
-                wait(200)
-                self.move_arm(-20)
-                wait(200)
+            if inner == "black":
+                self._prepare_delivery_close()
                 self.gyro_turn(-5)
                 wait(200)
                 self.gyro_straight(27)
-            elif self.probe_order[2] == "blue":
-                self.release_towers()
-                wait(200)
-                self.release()
-                wait(200)
-                self.gyro_turn(-5)
-                wait(200)
-                self.move_arm(-20)
-                wait(200)
+            elif inner == "blue":
+                self._prepare_delivery_standard()
                 self.gyro_straight(-50)
                 wait(200)
                 self.gyro_turn(30)
@@ -521,18 +543,11 @@ class Robot:
                 wait(200)
                 self.gyro_straight(60)
                 wait(200)
-                self.gyro_turn(40)
+                self.gyro_turn(35)
                 wait(200)
-                self.gyro_straight(68)
-            elif self.probe_order[2] == "yellow":
-                self.release_towers()
-                wait(200)
-                self.release()
-                wait(200)
-                self.gyro_turn(-5)
-                wait(200)
-                self.move_arm(-20)
-                wait(200)
+                self.gyro_straight(74)
+            elif inner == "yellow":
+                self._prepare_delivery_standard()
                 self.gyro_straight(-50)
                 wait(200)
                 self.gyro_turn(30)
@@ -548,27 +563,90 @@ class Robot:
                 self.gyro_turn(15)
                 wait(200)
                 self.gyro_straight(35)
-            elif self.probe_order[2] == "red":
-                self.release_towers()
+            elif inner == "red":
+                self._prepare_delivery_standard()
+                self._long_route(350)
+            
+        elif outer == "black":
+            self.gyro_turn(176.3, speed=50)
+            wait(200)
+            self.drive_until_color("red")
+            wait(200)
+            self.gyro_straight(-5)
+            wait(200)
+            self.gyro_turn(19)
+            wait(200)
+            if inner == "blue":
+                self._prepare_delivery_close()
+                self.gyro_turn(-10)
                 wait(200)
-                self.release()
-                wait(200)
-                self.gyro_turn(-5)
-                wait(200)
-                self.move_arm(-20)
-                wait(200)
+                self.gyro_straight(27)
+            elif inner == "yellow":
+                self._prepare_delivery_standard()
                 self.gyro_straight(-50)
                 wait(200)
                 self.gyro_turn(30)
                 wait(200)
                 self.move_arm(105)
                 wait(200)
-                self.gyro_straight(70)
+                self.gyro_straight(60)
                 wait(200)
-                self.gyro_turn(55.5)
+                self.gyro_turn(30)
                 wait(200)
-                self.gyro_straight(310)
-        
+                self.gyro_straight(100)
+            elif inner == "green":
+                self._prepare_delivery_standard()
+                self._long_route(350)
+            elif inner == "red":
+                self._prepare_delivery_standard()
+                self._long_route(480)
+
+        elif outer == "blue":
+            self.gyro_turn(187.1, speed=50)
+            wait(200)
+            self.drive_until_color("red")
+            wait(200)
+            self.gyro_straight(-5)
+            wait(200)
+            self.gyro_turn(12)
+            wait(200)
+            if inner == "yellow":
+                self._prepare_delivery_close()
+                self.gyro_turn(-10)
+                wait(200)
+                self.gyro_straight(27)
+            elif inner == "black":
+                self._prepare_delivery_standard()
+                self._long_route(350)
+            elif inner == "green":
+                self._prepare_delivery_standard()
+                self._long_route(480)
+            elif inner == "red":
+                self._prepare_delivery_standard()
+                self._long_route(610)
+
+        elif outer == "yellow":
+            self.gyro_turn(193, speed=50)
+            wait(200)
+            self.drive_until_color("red")
+            wait(200)
+            self.gyro_straight(-5)
+            wait(200)
+            self.gyro_turn(7)
+            wait(200)
+            if inner == "blue":
+                self._prepare_delivery_standard()
+                self._long_route(300, final_distance=125)
+            elif inner == "black":
+                self._prepare_delivery_standard()
+                self._long_route(480)
+            elif inner == "green":
+                self._prepare_delivery_standard()
+                self._long_route(610)
+            elif inner == "red":
+                self._prepare_delivery_standard()
+                self._long_route(610)
+
 
     # Mission run
 
@@ -579,19 +657,19 @@ class Robot:
         wait(200)
         self.left_motor.run_angle(300, 523)
         wait(200)
-        self.gyro_straight(262.5, speed=200)
+        self.gyro_straight(264, speed=200)
         wait(200)
-        self.gyro_turn(-92, speed=50)
+        self.gyro_turn(-90, speed=50)
         wait(200)
         self.probe_order = self.scan_probes()
         print(self.probe_order)
         self.gyro_turn(50, speed=100)
         wait(200)
-        self.gyro_straight(-243)
+        self.gyro_straight(-240)
         wait(200)
-        self.gyro_turn(42, speed=100)
+        self.gyro_turn(43, speed=100)
         wait(200)
-        self.gyro_straight(173, speed=250)
+        self.gyro_straight(170, speed=250)
         self.drive_until_color("green", speed=150)
         self.gyro_straight(10)
         self.start_grab_towers()
