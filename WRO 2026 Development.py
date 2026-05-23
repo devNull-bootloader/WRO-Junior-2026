@@ -22,12 +22,6 @@ class Robot:
         # Drive base
         self.drive_base = DriveBase(self.left_motor, self.right_motor, 56, 165)
 
-        # Line follow PID constants (kept exactly as you requested)
-        self.target = 25.5
-        self.Kp = 5
-        self.Kd = 4
-        self.Ki = 0
-
         # Line color detection constants (hue ranges)
         self.red_range = (340, 10) # wrap-around
         self.blue_range = (221, 225)
@@ -328,7 +322,12 @@ class Robot:
 
         self.drive_base.brake()
 
-    def line_follow(self, distance, speed=200, target_color=None, timeout_ms=None):
+    def line_follow(self, distance, speed=200, target_color=None, Kp=5, timeout_ms=None):
+        # Line follow PID constants (kept exactly as you requested)
+        target = 28.5
+        Kp = Kp
+        Kd = 4
+        Ki = 0
         # PD line follow using your PID constants (unchanged).
         integral = 0
         last_error = 0
@@ -344,11 +343,11 @@ class Robot:
                 break
 
             reflection = self.line_sensor.reflection()
-            error = reflection - self.target
+            error = reflection - target
 
             integral += error
             derivative = error - last_error
-            correction = (self.Kp * error) + (self.Kd * derivative)
+            correction = (Kp * error) + (Kd * derivative)
 
             last_error = error
 
@@ -373,7 +372,7 @@ class Robot:
                     if h > self.red_range[0] or h < self.red_range[1]:
                         break
                 elif target_color == "blue":
-                    if self.blue_range[0] < h < self.blue_range[1] and s > 18:
+                    if self.blue_range[0] < h < self.blue_range[1] and s > 19:
                         break
                 elif target_color == "green":
                     if self.green_range[0] < h < self.green_range[1]:
@@ -928,42 +927,42 @@ class Robot:
 
     def blocks_task(self):
         self.move_arm(-48, speed=600)
-        self.gyro_straight(1000, speed=300)
-        wait(100)
+        self.gyro_straight(1020, speed=300)
+        wait(200)
         self.gyro_turn(-10)
-        wait(100)
+        wait(200)
         self.line_follow(1000, target_color="blue")
-        wait(100)
+        wait(200)
         self.gyro_straight(-200, speed=500)
-        wait(100)
+        wait(200)
         self.gyro_turn(20)
-        wait(100)
+        wait(200)
         self.gyro_straight(370, speed=400)
-        wait(100)
+        wait(200)
         self.right_motor.run_angle(600, 645)
-        wait(100)
+        wait(200)
         self.gyro_straight(300, speed=300)
-        wait(100)
+        wait(200)
         self.gyro_straight(-350, speed=500)
-        wait(100)
+        wait(200)
         self.gyro_turn(-91)
-        wait(100)
+        wait(200)
         self.gyro_straight(70, speed=500)
-        wait(100)
+        wait(200)
         self.gyro_turn(93)
-        wait(100)
+        wait(200)
         self.gyro_straight(350, speed=400)
 
     def yellow_towers_task(self):
-        self.line_follow(5000, target_color="blue")
+        self.line_follow(5000, target_color="blue", Kp=5, speed=150)
         wait(100)
         self.move_arm(-48)
         self.gyro_straight(750, speed=500)
         wait(100)
-        self.gyro_straight(-129, speed=200)
+        self.gyro_straight(-125, speed=200)
         self.move_arm(151)
         wait(100)
-        self.gyro_turn(92, speed=100)
+        self.gyro_turn(91, speed=100)
         wait(100)
         self.gyro_straight(390, speed=200)
         wait(100)
@@ -971,14 +970,15 @@ class Robot:
         wait(1000)
         self.update_grabber()
         wait(100)
-        self.gyro_straight(-375, speed=200)
+        self.gyro_straight(-380, speed=200)
         wait(100)
         self.gyro_turn(91, speed=100)
         wait(100)
-        self.gyro_straight(400, speed=200)
+        self.gyro_straight_acc(400, speed=300)
         wait(100)
         self.drive_until_color("blue")
         wait(500)
+        self.gyro_straight(20, speed=50)
         self.release_towers()
         wait(200)
         self.release()
@@ -999,23 +999,23 @@ class Robot:
         wait(1500)
         self.update_grabber_grab()
         wait(200)
-        self.gyro_straight(-70)
+        self.gyro_straight(-90)
         wait(100)
         self.gyro_turn(-91, speed=300)
         wait(100)
         self.move_arm(-48, speed=300)
         wait(100)
-        self.gyro_straight(130, speed=200)
+        self.gyro_straight(140, speed=200)
         wait(100)
         self.move_arm(29, speed=100)
         wait(100)
         self.spread()
         wait(100)
-        self.gyro_straight(-270)
+        self.gyro_straight(-280)
         wait(100)
         self.gyro_turn(91, speed=300)
         wait(100)
-        self.gyro_straight(100)
+        self.gyro_straight(120)
         wait(100)
         self.move_arm(151, speed=300)
         wait(100)
@@ -1023,19 +1023,19 @@ class Robot:
         wait(1500)
         self.update_grabber_grab()
         wait(200)
-        self.gyro_straight(-65)
+        self.gyro_straight(-90)
         wait(100)
         self.gyro_turn(91)
         wait(100)
         self.move_arm(-48, speed=300)
         wait(100)
-        self.gyro_straight(100, speed=300)
+        self.gyro_straight(80, speed=300)
         wait(100)
         self.move_arm(29, speed=100)
         wait(100)
         self.spread()
         wait(100)
-        self.gyro_straight(-190)
+        self.gyro_straight(-175)
         wait(100)
         self.gyro_turn(90)
         wait(100)
@@ -1043,7 +1043,7 @@ class Robot:
     def run(self):
         self.blocks_task()
         wait(100)
-        self.gyro_straight(-235)
+        self.gyro_straight(-205)
         wait(100)
         self.gyro_turn(-96)
         wait(100)
@@ -1058,11 +1058,11 @@ class Robot:
         wait(100)
         self.gyro_turn(-91)
         wait(100)
-        self.gyro_straight(320)
+        self.gyro_straight(345)
         self.start_spread_towers()
         wait(1000)
         self.update_grabber()
-        self.gyro_straight(-350)
+        self.gyro_straight(-360)
         wait(100)
         self.gyro_turn(-91)
         wait(100)
@@ -1094,11 +1094,11 @@ class Robot:
         wait(100)
         self.gyro_straight_acc(270)
         self.spread()
-        self.gyro_straight(-225)
+        self.gyro_straight(-175)
         wait(100)
         self.gyro_turn(106)
         wait(100)
-        self.gyro_straight(100)
+        self.gyro_straight(160)
         wait(100)
         self.release(wait=False)
         self.line_follow(5000, target_color="blue")
@@ -1107,11 +1107,11 @@ class Robot:
         wait(100)
         self.gyro_turn(-91)
         wait(100)
-        self.gyro_straight(350)
+        self.gyro_straight(360)
         self.start_spread_towers()
         wait(1000)
         self.update_grabber()
-        self.gyro_straight(-357)
+        self.gyro_straight(-367)
         wait(100)
         self.gyro_turn(-93)
         wait(100)
@@ -1121,13 +1121,14 @@ class Robot:
         self.release()
         self.gyro_straight(-70)
         wait(100)
-        self.gyro_turn(30)
+        self.gyro_turn(-30)
         wait(100)
         self.gyro_straight(90)
         wait(100)
-        self.gyro_turn(156)
+        self.gyro_turn(-156)
+        self.move_arm(-48)
         wait(100)
-        self.gyro_straight(600)
+        self.gyro_straight(700)
 
 
 robot = Robot()
