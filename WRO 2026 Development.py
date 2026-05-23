@@ -24,7 +24,7 @@ class Robot:
 
         # Line follow PID constants (kept exactly as you requested)
         self.target = 25.5
-        self.Kp = 4
+        self.Kp = 5
         self.Kd = 4
         self.Ki = 0
 
@@ -225,7 +225,110 @@ class Robot:
 
         self.drive_base.brake()
 
-    def line_follow(self, distance, target_color=None, timeout_ms=None):
+    def gyro_turn_acc(self, angle, speed=300, timeout_ms=None):
+        try:
+            self.hub.imu.reset_heading(0)
+        except Exception:
+            pass
+
+        target = angle
+        elapsed = 0
+        step = 10
+
+        ACCEL_ZONE = 20  # degrees to ramp up
+        DECEL_ZONE = 30  # degrees to ramp down
+        MIN_SPEED  = 60
+
+        while True:
+            if timeout_ms is not None and elapsed >= timeout_ms:
+                break
+
+            try:
+                current = self.hub.imu.heading()
+            except Exception:
+                current = 0
+
+            error = target - current
+
+            # Stop when close enough
+            if abs(error) < 2:
+                break
+
+            traveled = abs(angle) - abs(error)
+            direction = 1 if error > 0 else -1
+
+            if traveled < ACCEL_ZONE:
+                turn_speed = max(MIN_SPEED, int(speed * traveled / ACCEL_ZONE))
+            elif abs(error) < DECEL_ZONE:
+                turn_speed = max(MIN_SPEED, int(speed * abs(error) / DECEL_ZONE))
+            else:
+                turn_speed = speed
+
+            turn_speed *= direction
+
+            # Clamp speed
+            if turn_speed > speed:
+                turn_speed = speed
+            elif turn_speed < -speed:
+                turn_speed = -speed
+
+            self.drive_base.drive(0, turn_speed)
+
+            # Keep grabber active
+            self.update_grabber()
+            wait(step)
+            elapsed += step
+
+        self.drive_base.brake()
+
+    def gyro_straight_acc(self, distance, speed=300, timeout_ms=None):
+        # Straight drive using IMU heading correction. Polls grabber during motion.
+        self.drive_base.reset()
+        try:
+            self.hub.imu.reset_heading(0)
+        except Exception:
+            pass
+
+        direction = 1 if distance >= 0 else -1
+        target_abs = abs(distance)
+
+        ACCEL_ZONE = 100  # mm to ramp up
+        DECEL_ZONE = 100  # mm to ramp down
+        MIN_SPEED  = 80
+
+        elapsed = 0
+        step = 10
+
+        while abs(self.drive_base.distance()) < target_abs:
+            if timeout_ms is not None and elapsed >= timeout_ms:
+                break
+
+            try:
+                error = self.hub.imu.heading()
+            except Exception:
+                error = 0
+
+            traveled  = abs(self.drive_base.distance())
+            remaining = target_abs - traveled
+
+            if traveled < ACCEL_ZONE:
+                drive_speed = max(MIN_SPEED, int(speed * traveled / ACCEL_ZONE))
+            elif remaining < DECEL_ZONE:
+                drive_speed = max(MIN_SPEED, int(speed * remaining / DECEL_ZONE))
+            else:
+                drive_speed = speed
+
+            correction = error * (1.5 if self.carrying else 2)
+            self.drive_base.drive(drive_speed * direction, -correction)
+
+            # Poll grabber while moving
+            self.update_grabber()
+            wait(step)
+            elapsed += step
+
+        self.drive_base.brake()
+
+    def line_follow(self, distance, speed=200, target_color=None, timeout_ms=None):
         # PD line follow using your PID constants (unchanged).
         integral = 0
         last_error = 0
@@ -254,7 +357,7 @@ class Robot:
                 base_speed = 200
                 correction *= 0.8 # smoother turns
             else:
-                base_speed = 200 if target_color is None else 200
+                base_speed = speed if target_color is None else speed
 
             self.drive_base.drive(base_speed, correction)
 
@@ -327,11 +430,11 @@ class Robot:
         self.drive_base.brake()
 
     # Arm / Grabber
-    def move_arm(self, angle, speed=400):
+    def move_arm(self, angle, speed=400, wait=True):
         # Blocking move to target angle
-        self.up_motor.run_target(speed, angle, then=Stop.HOLD)
+        self.up_motor.run_target(speed, angle, then=Stop.HOLD, wait=wait)
 
-    def release(self):
+    def release(self, wait=True):
         # Blocking grab: move to target and set carrying True after motion completes.
         self.grabber_motor.run_target(200, -50) # blocking
         self.carrying = True
@@ -346,9 +449,9 @@ class Robot:
         self.grabber_motor.run_target(speed, angle)
 
     # High level actions
-    def start_spread_towers(self):
+    def start_spread_towers(self, speed=150):
         # Non-blocking start: spin grabber slowly while approaching towers.
-        self.grabber_motor.run(150)
+        self.grabber_motor.run(speed)
         self.grabbing = True
         # Do not set carrying here; set carrying when a stall or successful grab is detected
 
@@ -364,7 +467,7 @@ class Robot:
         self.grabbing = False
         self.carrying = False
 
-    def update_grabber(self):
+    def update_grabber(self, speed=10):
         # Polling method: if we were trying to grab and the motor stalls, assume we have grabbed.
         try:
             stalled = self.grabber_motor.stalled()
@@ -373,7 +476,7 @@ class Robot:
 
         if self.grabbing and stalled:
             # reduce power to hold
-            self.grabber_motor.run(10)
+            self.grabber_motor.run(speed)
             self.grabbing = False
             self.carrying = True
 
@@ -852,14 +955,14 @@ class Robot:
         self.gyro_straight(350, speed=400)
 
     def run(self):
-        # self.blocks_task()
-        # wait(100)
-        # self.gyro_straight(-235)
-        # wait(100)
-        # self.gyro_turn(-96)
-        # wait(100)
-        # self.gyro_straight(100)
-        # wait(100)
+        self.blocks_task()
+        wait(100)
+        self.gyro_straight(-235)
+        wait(100)
+        self.gyro_turn(-96)
+        wait(100)
+        self.gyro_straight(100)
+        wait(100)
         self.line_follow(5000, target_color="blue")
         wait(100)
         self.move_arm(-48)
@@ -940,7 +1043,53 @@ class Robot:
         wait(100)
         self.spread()
         wait(100)
-        self.gyro_straight(-210)
+        self.gyro_straight(-190)
+        wait(100)
+        self.gyro_turn(90)
+        wait(100)
+        self.release()
+        self.move_arm(151, wait=False)
+        self.line_follow(5000, target_color="blue")
+        wait(200)
+        self.gyro_straight(50, speed=50)
+        wait(100)
+        self.gyro_turn(-91)
+        wait(100)
+        self.gyro_straight(320)
+        self.start_spread_towers()
+        wait(1000)
+        self.update_grabber()
+        self.gyro_straight(-350)
+        wait(100)
+        self.gyro_turn(-91)
+        wait(100)
+        self.gyro_straight(1000, speed=300)
+        wait(100)
+        self.gyro_turn(-10)
+        wait(100)
+        self.line_follow(1000, target_color="blue")
+        wait(200)
+        self.gyro_turn(-32)
+        wait(100)
+        self.gyro_straight(230)
+        self.release_towers()
+        self.release()
+        wait(100)
+        self.gyro_straight(-50)
+        wait(100)
+        self.gyro_turn(20)
+        wait(100)
+        self.spread(angle=50)
+        self.gyro_straight(60)
+        self.start_grab_towers()
+        wait(1500)
+        self.update_grabber()
+        wait(100)
+        self.gyro_straight_acc(-20)
+        wait(100)
+        self.gyro_turn(87)
+        wait(100)
+        self.gyro_straight_acc(270)
 
 
 robot = Robot()
