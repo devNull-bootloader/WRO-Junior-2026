@@ -2,7 +2,7 @@ from pybricks.hubs import PrimeHub
 from pybricks.pupdevices import Motor, ColorSensor
 from pybricks.parameters import Port, Direction, Stop
 from pybricks.robotics import DriveBase
-from pybricks.tools import wait
+from pybricks.tools import wait, StopWatch
 
 class Robot:
     def __init__(self):
@@ -971,7 +971,7 @@ class Robot:
         self.up_motor.reset_angle(0)
         self.up_motor.run_target(200, 192)
         wait(100)
-        self.gyro_turn(91, speed=100)
+        self.gyro_turn(91.5, speed=100)
         wait(100)
         self.gyro_straight(410, speed=300)
         wait(100)
@@ -1055,6 +1055,9 @@ class Robot:
         wait(100)
 
     def run(self):
+        stopwatch = StopWatch()
+        stopwatch.reset()
+        stopwatch.resume()
         self.blocks_task()
         wait(100)
         self.gyro_straight(-215)
@@ -1105,7 +1108,7 @@ class Robot:
         wait(100)
         self.gyro_turn(87)
         wait(100)
-        self.gyro_straight_acc(250)
+        self.gyro_straight_acc(260)
         self.spread()
         self.gyro_straight(-125)
         wait(100)
@@ -1143,6 +1146,10 @@ class Robot:
         self.up_motor.run_target(200, -192)
         wait(100)
         self.gyro_straight(700)
+        wait(100)
+        self.gyro_straight_acc(-300, speed=500)
+        print(stopwatch.time())
+        stopwatch.pause()
 
 
 robot = Robot()
