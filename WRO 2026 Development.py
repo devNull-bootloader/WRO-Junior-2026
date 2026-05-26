@@ -288,8 +288,8 @@ class Robot:
         direction = 1 if distance >= 0 else -1
         target_abs = abs(distance)
 
-        ACCEL_ZONE = 100  # mm to ramp up
-        DECEL_ZONE = 100  # mm to ramp down
+        ACCEL_ZONE = 200  # mm to ramp up
+        DECEL_ZONE = 200  # mm to ramp down
         MIN_SPEED  = 80
 
         elapsed = 0
@@ -970,7 +970,7 @@ class Robot:
         # self.line_follow(5000, target_color="blue", Kp=5, speed=150)
         self.gyro_straight(500, speed=500)
         wait(100)
-        self.gyro_straight(-132, speed=150)
+        self.gyro_straight(-130, speed=150)
         self.up_motor.reset_angle(0)
         self.up_motor.run_target(200, 192, wait=False)
         wait(100)
@@ -982,15 +982,17 @@ class Robot:
         wait(1000)
         self.update_grabber()
         wait(100)
-        self.gyro_straight(-410, speed=150)
+        self.gyro_straight(-420, speed=150)
         wait(100)
-        self.gyro_turn(92, speed=80)
+        self.gyro_turn(91, speed=80)
         wait(100)
         self.gyro_straight_acc(400, speed=300)
         wait(100)
         self.drive_until_color("blue")
         wait(500)
-        self.gyro_straight(20, speed=50)
+        self.gyro_straight(80, speed=100)
+        wait(100)
+        self.gyro_straight(-60, speed=50)
         self.release_towers()
         wait(200)
         self.release()
@@ -1132,7 +1134,7 @@ class Robot:
         self.start_spread_towers()
         wait(1000)
         self.update_grabber()
-        self.gyro_straight(-340)
+        self.gyro_straight(-350)
         wait(100)
         self.gyro_turn(-93)
         wait(100)
